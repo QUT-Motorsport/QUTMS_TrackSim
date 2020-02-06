@@ -4,23 +4,26 @@ clc, clear variables, close all
 
 Author_Name = 'Nathan Nahrung';
 Author_Email = 'nnahrung@gmail.com';
-Track_Name = 'lakeside_track';
+Track_Name = 'lakeside track';
 File_Name = 'model';% used for .sdf & .config
-Path_width = 3;%greater than (error aprox = resolution) - Note: FSG Rule Competition Handbook 2020 DE6.3 - minimum 3 m
+track_width = 3;%greater than (error aprox = resolution) - Note: FSG Rule Competition Handbook 2020 DE6.3 - minimum 3 m
 Cone_sep = 3;%less than (error aprox = resolution) - Note: FSG Rule Competition Handbook 2020 DE6.3 - cone sep should be less than 5 m and reduced at corners
-clockwise = true;%false;%
-resolution = 0.5;%grid unit in metres
+big_cone_sep = 0.6;
+track_direction_clockwise = true;%false;% 
+resolution = 0.1;%grid unit in metres
 interpulation = 4;%used to close gaps in GPS data
 track_offset = [0, 0];%meters xy offset of track (by default center of start is [0, 0])
 track_rotation = 0;%Starting direction is positive x, change this bearing anticlockwise with degrees
-acceleration_test = true;%false;%
-straight_length = 75; % acceleration_test variable (acceleration length)
-break_length = 100; % acceleration_test variable (breaking length)
+acceleration_test = false;%true;%
+acceleration_straight_length = 75; % acceleration_test variable (acceleration length)
+acceleration_break_length = 100; % acceleration_test variable (breaking length)
 skidpad_test = false;%true;%
-entrance_length = 6; % skidpad_test variable (lengh from start to 
-mid_length = 15; % skidpad_test variable (length 
-exit_length = 13; % skidpad_test variable 
-big_cone_sep = 0.6;
+skidpad_entrance_length = 7.4; % skidpad_test variable end of entrance from [0,0]
+skidpad_mid_length = 15; % skidpad_test variable mid point of circles from [0,0] 
+skidpad_exit_length = 22.6; % skidpad_test variable start of exit from [0,0]
+skidpad_inner_radius = 15.2;
+skidpad_outer_radius = 21.2;
+skidpad_circle_sep = 18.25;
 Cone_Model_blue = '//qut_description/meshes/cone_blue.dae';
 Cone_Model_yelw = '//qut_description/meshes/cone_yellow.dae';
 Cone_Model_big = '//qut_description/meshes/cone_big.dae';
@@ -46,8 +49,6 @@ Data_trimmed = Data_Array(5650:24780,1:3);
 % Data_Table = readtable('QUT GPS3.csv');
 % Data_Array = table2array(Data_Table);
 % Data_trimmed = Data_Array;
-
-% Data_trimmed = [linspace(0, 0, 101)', linspace(0, 100, 101)', linspace(0, 0, 101)']*0.00001;
 
 figure(2)
 axis equal
@@ -146,7 +147,7 @@ Cone_orng3 = [NaN,NaN];
 %% Processing Geo to Flat
 
 if acceleration_test == true
-    Data_flat = [linspace(0, 0, 1001)', linspace(0, straight_length + break_length - 1, 1001)', linspace(0, 0, 1001)'];
+    Data_flat = [linspace(0, 0, 1001)', linspace(0, acceleration_straight_length + acceleration_break_length - 1, 1001)', linspace(0, 0, 1001)'];
 end
 if skidpad_test == true
     Data_flat = [linspace(0, 0, 1001)', linspace(0, 40, 1001)', linspace(0, 0, 1001)'];
@@ -179,12 +180,12 @@ Data_grid = bwmorph(Data_grid, 'skel');
 %% Create Track 
 
 if (acceleration_test || skidpad_test) == true 
-    filter_shape1 = ones(2+round(Path_width/resolution));
-    filter_shape2 = ones(round(Path_width/resolution),1+round(Path_width/resolution));
-    clockwise = true;
+    filter_shape1 = ones(2+round(track_width/resolution));
+    filter_shape2 = ones(round(track_width/resolution),1+round(track_width/resolution));
+    track_direction_clockwise = true;
 else
-    filter_shape1 = fspecial('disk', (0.5*Path_width/resolution)+1) > 0;
-    filter_shape2 = fspecial('disk', (0.5*Path_width/resolution)) > 0;
+    filter_shape1 = fspecial('disk', (0.5*track_width/resolution)+1) > 0;
+    filter_shape2 = fspecial('disk', (0.5*track_width/resolution)) > 0;
 end
 
 Data_wide = imdilate(Data_grid, filter_shape1);
@@ -214,79 +215,50 @@ if ~any(index)
     index = Cone_map_y < 0;
 end
 
-index = index == clockwise;
+index = index == track_direction_clockwise;
 
 Cone_blue1 = [Cone_map_x(~index), Cone_map_y(~index)];
 Cone_yelw1 = [Cone_map_x(index), Cone_map_y(index)];
 Cone_orng1 = [NaN, NaN];
 
 if acceleration_test == true
-    Cone_orng1 = Cone_blue1(~logical(Cone_blue1(:,1) < straight_length), :);
-    Cone_blue1 = Cone_blue1(logical(Cone_blue1(:,1) < straight_length), :);
-    Cone_orng1 = [Cone_orng1; Cone_yelw1(~logical(Cone_yelw1(:,1) < straight_length), :)];
-    Cone_yelw1 = Cone_yelw1(logical(Cone_yelw1(:,1) < straight_length), :);
+    Cone_orng1 = Cone_blue1(~logical(Cone_blue1(:,1) < acceleration_straight_length), :);
+    Cone_blue1 = Cone_blue1(logical(Cone_blue1(:,1) < acceleration_straight_length), :);
+    Cone_orng1 = [Cone_orng1; Cone_yelw1(~logical(Cone_yelw1(:,1) < acceleration_straight_length), :)];
+    Cone_yelw1 = Cone_yelw1(logical(Cone_yelw1(:,1) < acceleration_straight_length), :);
 end
 if skidpad_test == true
-    Cone_orng1 = Cone_blue1(logical((Cone_blue1(:,1) < entrance_length) + (Cone_blue1(:,1) > exit_length)), :);
-    Cone_blue1 = Cone_blue1(~logical((Cone_blue1(:,1) < entrance_length) + (Cone_blue1(:,1) > exit_length)), :);
-    Cone_orng1 = [Cone_orng1; Cone_yelw1(logical((Cone_yelw1(:,1) < entrance_length) + (Cone_yelw1(:,1) > exit_length)), :)];
-    Cone_yelw1 = Cone_yelw1(~logical((Cone_yelw1(:,1) < entrance_length) + (Cone_yelw1(:,1) > exit_length)), :);
+    Cone_orng1 = Cone_blue1(logical((Cone_blue1(:,1) < skidpad_entrance_length) + (Cone_blue1(:,1) > skidpad_exit_length)), :);
+    Cone_blue1 = Cone_blue1(~logical((Cone_blue1(:,1) < skidpad_entrance_length) + (Cone_blue1(:,1) > skidpad_exit_length)), :);
+    Cone_orng1 = [Cone_orng1; Cone_yelw1(logical((Cone_yelw1(:,1) < skidpad_entrance_length) + (Cone_yelw1(:,1) > skidpad_exit_length)), :)];
+    Cone_yelw1 = Cone_yelw1(~logical((Cone_yelw1(:,1) < skidpad_entrance_length) + (Cone_yelw1(:,1) > skidpad_exit_length)), :);
     Cone_blue1 = [Cone_blue1(1,:);Cone_blue1(end,:)];
     Cone_yelw1 = [Cone_yelw1(1,:);Cone_yelw1(end,:)];
 end
 
 %% Track edges to cone locations
 
-% Start_point = [mean([Data_flat(1,2),Data_flat(end,2)],2), mean([Data_flat(1,1),Data_flat(end,1)],2)];%Data_flat(1,1:2);%
-Start_point = Data_flat(1,1:2);
-End_point = Data_flat(end,1:2);
+Start_point = fliplr(Data_flat(1,1:2));
+End_point = fliplr(Data_flat(end,1:2));
 
 Start_line = nan(2,2);
 End_line = nan(2,2);
 
-n = 1; % set the start big cone location
-Cone_cost_old = Path_width + Cone_sep;
-for k = 1:size(Cone_blue1,1)
-    Cone_cost = abs((sum((Start_point-Cone_blue1(k,:)).^2, 2)).^0.5);
-    if Cone_cost < Cone_cost_old
-        n = k;
-        Cone_cost_old = Cone_cost;
-    end
-end
-Start_line(1,:) = Cone_blue1(n,:);
+[~,index] = sort(sum((Cone_blue1(:,:)-Start_point).^2, 2).^0.5);
+Cone_blue1 = Cone_blue1(index,:);
+Start_line(1,:) = Cone_blue1(1,:);
 
-n = 1; % set the start big cone location
-Cone_cost_old = Path_width + Cone_sep;
-for k = 1:size(Cone_yelw1,1)
-    Cone_cost = abs((sum((Start_point-Cone_yelw1(k,:)).^2, 2)).^0.5);
-    if Cone_cost < Cone_cost_old
-        n = k;
-        Cone_cost_old = Cone_cost;
-    end
-end
-Start_line(2,:) = Cone_yelw1(n,:);
+[~,index] = sort(sum((Cone_blue1(:,:)-End_point).^2, 2).^0.5);
+Cone_blue1 = Cone_blue1(index,:);
+End_line(1,:) = Cone_blue1(1,:);
 
-n = 1; % set the end big cone location
-Cone_cost_old = Path_width + Cone_sep;
-for k = 1:size(Cone_blue1,1)
-    Cone_cost = abs((sum((End_point-Cone_blue1(k,:)).^2, 2)).^0.5);
-    if Cone_cost < Cone_cost_old
-        n = k;
-        Cone_cost_old = Cone_cost;
-    end
-end
-End_line(1,:) = Cone_blue1(n,:);
+[~,index] = sort(sum((Cone_yelw1(:,:)-Start_point).^2, 2).^0.5);
+Cone_yelw1 = Cone_yelw1(index,:);
+Start_line(2,:) = Cone_yelw1(1,:);
 
-n = 1; % set the end big cone location
-Cone_cost_old = Path_width + Cone_sep;
-for k = 1:size(Cone_yelw1,1)
-    Cone_cost = abs((sum((End_point-Cone_yelw1(k,:)).^2, 2)).^0.5);
-    if Cone_cost < Cone_cost_old
-        n = k;
-        Cone_cost_old = Cone_cost;
-    end
-end
-End_line(2,:) = Cone_yelw1(n,:);
+[~,index] = sort(sum((Cone_yelw1(:,:)-End_point).^2, 2).^0.5);
+Cone_yelw1 = Cone_yelw1(index,:);
+End_line(2,:) = Cone_yelw1(1,:);
 
 if skidpad_test == false
     for k = 1:size(Cone_blue1,1)
@@ -309,7 +281,7 @@ if skidpad_test == false
     Cone_blue3(any(isnan(Cone_blue3), 2), :) = [];
 
     n = 1;
-    Cone_cost_old = Path_width + Cone_sep;
+    Cone_cost_old = track_width + Cone_sep;
     for k = 1:size(Cone_blue3,1)
         Cone_cost = abs((sum((Start_point-Cone_blue3(k,:)).^2, 2)).^0.5);
         if Cone_cost < Cone_cost_old
@@ -343,7 +315,7 @@ if skidpad_test == false
     Cone_yelw3(any(isnan(Cone_yelw3), 2), :) = [];
 
     n = 1;
-    Cone_cost_old = Path_width + Cone_sep;
+    Cone_cost_old = track_width + Cone_sep;
     for k = 1:size(Cone_yelw3,1)
         Cone_cost = abs((sum((Start_point-Cone_yelw3(k,:)).^2, 2)).^0.5);
         if Cone_cost < Cone_cost_old
@@ -384,63 +356,82 @@ Cone_orng3(any(isnan(Cone_orng3), 2), :) = [];
 Cone_yelw3 = [Cone_yelw3;Data_flat_yelw(:,1:2)];
 Cone_yelw3(any(isnan(Cone_yelw3), 2), :) = [];
 
+if skidpad_test == true
+    blue_limit = min(Cone_blue3(:,2));
+    yelw_limit = max(Cone_yelw3(:,2));
+    mid_limit = mean([blue_limit, yelw_limit]);
+    inner_cone_number = linspace(0, 1, ceil(pi*skidpad_inner_radius/Cone_sep)+1);
+    inner_circle = [(sin((inner_cone_number*pi*2)))', (cos((inner_cone_number*pi*2)))']*skidpad_inner_radius*0.5;
+    outer_cone_number = linspace(0, 1, ceil(pi*skidpad_outer_radius/Cone_sep)+1);
+    outer_circle = [(sin((outer_cone_number*pi*2)))', (cos((outer_cone_number*pi*2)))']*skidpad_outer_radius*0.5;
+    Cone_yelw3 = [Cone_yelw3; [skidpad_mid_length, mid_limit-skidpad_circle_sep/2] + [outer_circle(1:end-1,1),-outer_circle(1:end-1,2)]];
+    Cone_blue3 = [Cone_blue3; [skidpad_mid_length, mid_limit+skidpad_circle_sep/2] + [outer_circle(1:end-1,1),outer_circle(1:end-1,2)]];
+    Cone_yelw3 = Cone_yelw3(Cone_yelw3(:,2) < (yelw_limit+resolution), :);
+    Cone_blue3 = Cone_blue3(Cone_blue3(:,2) > (blue_limit-resolution), :);
+    Cone_yelw3 = [Cone_yelw3; [skidpad_mid_length, mid_limit+skidpad_circle_sep/2] + inner_circle(1:end-1,:)];
+    Cone_blue3 = [Cone_blue3; [skidpad_mid_length, mid_limit-skidpad_circle_sep/2] + inner_circle(1:end-1,:)];
+end
+
 Start_line = [Start_line;Data_flat_big(:,1:2)];
 Start_line(any(isnan(Start_line), 2), :) = [];
 
 %% Translate and Rotate
 
-% Data_flat(:,1:2) =  Data_flat(:,1:2) - fliplr(Start_point);
-% Cone_blue3 = Cone_blue3 - Start_point;
-% Cone_yelw3 = Cone_yelw3 - Start_point;
-% Cone_big3 = Cone_big3 - Start_point;
-% Cone_orng3 = Cone_orng3 - Start_point;
-% End_line = End_line - Start_point;
-% End_point = End_point - Start_point;
-% Start_line = Start_line - Start_point;
-% Start_point = Start_point - Start_point;
-% 
-% track_rotation = 180 - track_rotation - atan2d(Start_line(2,1) - Start_line(1,1), Start_line(2,2) - Start_line(1,2));
-% Rotation_matrix = [cosd(track_rotation), -sind(track_rotation); sind(track_rotation), cosd(track_rotation)];
-% 
-% Data_flat(:,1:2) = (Rotation_matrix * Data_flat(:,1:2)')';
-% Cone_blue3 = fliplr((Rotation_matrix * flip(Cone_blue3'))');
-% Cone_yelw3 = fliplr((Rotation_matrix * flip(Cone_yelw3'))');
-% Cone_big3 = fliplr((Rotation_matrix * flip(Cone_big3'))');
-% Cone_orng3 = fliplr((Rotation_matrix * flip(Cone_orng3'))');
-% Start_line = fliplr((Rotation_matrix * flip(Start_line'))');
-% Start_point = fliplr((Rotation_matrix * flip(Start_point'))');
-% End_line = fliplr((Rotation_matrix * flip(End_line'))');
-% End_point = fliplr((Rotation_matrix * flip(End_point'))');
-% 
-% Data_flat(:,1:2) =  fliplr(track_offset) + Data_flat(:,1:2);
-% Cone_blue3 = track_offset + Cone_blue3;
-% Cone_yelw3 = track_offset + Cone_yelw3;
-% Cone_big3 = track_offset + Cone_big3;
-% Cone_orng3 = track_offset + Cone_orng3;
-% Start_line = track_offset + Start_line;
-% Start_point = track_offset + Start_point;
-% End_line = track_offset + End_line;
-% End_point = track_offset + End_point;
+Data_flat(:,1:2) =  Data_flat(:,1:2) - fliplr(Start_point);
+Cone_blue3 = Cone_blue3 - Start_point;
+Cone_yelw3 = Cone_yelw3 - Start_point;
+Cone_big3 = Cone_big3 - Start_point;
+Cone_orng3 = Cone_orng3 - Start_point;
+End_line = End_line - Start_point;
+End_point = End_point - Start_point;
+Start_line = Start_line - Start_point;
+Start_point = Start_point - Start_point;
+
+track_rotation = 180 - track_rotation - atan2d(Start_line(2,1) - Start_line(1,1), Start_line(2,2) - Start_line(1,2));
+Rotation_matrix = [cosd(track_rotation), -sind(track_rotation); sind(track_rotation), cosd(track_rotation)];
+
+Data_flat(:,1:2) = (Rotation_matrix * Data_flat(:,1:2)')';
+Cone_blue3 = fliplr((Rotation_matrix * flip(Cone_blue3'))');
+Cone_yelw3 = fliplr((Rotation_matrix * flip(Cone_yelw3'))');
+Cone_big3 = fliplr((Rotation_matrix * flip(Cone_big3'))');
+Cone_orng3 = fliplr((Rotation_matrix * flip(Cone_orng3'))');
+Start_line = fliplr((Rotation_matrix * flip(Start_line'))');
+Start_point = fliplr((Rotation_matrix * flip(Start_point'))');
+End_line = fliplr((Rotation_matrix * flip(End_line'))');
+End_point = fliplr((Rotation_matrix * flip(End_point'))');
+
+Data_flat(:,1:2) =  fliplr(track_offset) + Data_flat(:,1:2);
+Cone_blue3 = track_offset + Cone_blue3;
+Cone_yelw3 = track_offset + Cone_yelw3;
+Cone_big3 = track_offset + Cone_big3;
+Cone_orng3 = track_offset + Cone_orng3;
+Start_line = track_offset + Start_line;
+Start_point = track_offset + Start_point;
+End_line = track_offset + End_line;
+End_point = track_offset + End_point;
 
 %% Finalise
 
-% if skidpad_test == false
-%     if acceleration_test == true
-%         End_line = Start_line + [straight_length, 0];
-%         End_point = Start_point + [straight_length, 0];
-%     else
-%         End_line = Start_line;
-%         End_point = Start_point;
-%     end
-% end
-% End_line(any(isnan(End_line), 2), :) = [];
-% 
-% if skidpad_test == true
-%     Start_line = (Start_line + End_line)/2;
-%     Start_point = (Start_point + End_point)/2;
-%     End_line = Start_line;
-%     End_point = Start_point;
-% end
+if skidpad_test == false
+    if acceleration_test == true
+        End_line = Start_line + [acceleration_straight_length, 0];
+        End_point = Start_point + [acceleration_straight_length, 0];
+    else
+        End_line = Start_line;
+        End_point = Start_point;
+    end
+end
+End_line(any(isnan(End_line), 2), :) = [];
+
+if skidpad_test == true
+    Start_line = (Start_line + End_line)/2;
+    Start_point = (Start_point + End_point)/2;
+    End_line = Start_line;
+    End_point = Start_point;
+    Cone_blue2 = Cone_blue3;
+    Cone_blue3 = Cone_yelw3;
+    Cone_yelw3 = Cone_blue2;
+end
 
 Cone_big3 = [Cone_big3 ;[Start_line; End_line] + [big_cone_sep/2, 0]; [Start_line; End_line] - [big_cone_sep/2, 0]];
 Cone_big3(any(isnan(Cone_big3), 2), :) = [];
@@ -449,7 +440,7 @@ figure(1)
 axis equal
 hold on
 set(gca,'Color',[0.25, 0.25, 0.25])
-plot(Data_flat(1:end,2),Data_flat(1:end,1))
+% plot(Data_flat(1:end,2),Data_flat(1:end,1))
 plot(Cone_blue3(1:end,1), Cone_blue3(1:end,2), 'b.')
 plot(Cone_yelw3(1:end,1), Cone_yelw3(1:end,2), 'y.')
 plot(Cone_big3(1:end,1), Cone_big3(1:end,2), 'o', 'Color', [1,0.5,0])
